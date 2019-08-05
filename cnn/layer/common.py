@@ -11,5 +11,5 @@ class Layer:
         self.padding = padding
 
     def exec(self):
-        with tf.name_scope(self.default_name):
-            return tf.nn.conv2d(self.inputs, self.inputs, self.filters, self.strides, self.padding)
+        with tf.variable_scope(self.default_name):
+            return tf.nn.conv2d(self.inputs, self.inputs, self.filters, self.strides, self.padding, name='conv2d')
