@@ -32,7 +32,6 @@ class Layer:
             default: 'SAME'
         :return:
         '''
-
         self.inputs = inputs
         self.filters = filters
         if isinstance(strides, int):
@@ -41,8 +40,11 @@ class Layer:
             self.padding = padding
         return self
 
+    def layer(self):
+        filters = get_w(self.filters, 'weight')
+        self.inputs = tf.nn.conv2d(self.inputs, filters, self.strides, self.padding, name='conv2d')
+        return self.inputs
+
     def exec(self):
-        with tf.variable_scope(self.default_scope):
-            filters = get_w(self.filters, 'weight')
-            self.inputs = tf.nn.conv2d(self.inputs, filters, self.strides, self.padding, name='conv2d')
-            return self.inputs
+        with tf.variable_scope(self.default_scope, reuse=tf.AUTO_REUSE):
+            return self.layer()
