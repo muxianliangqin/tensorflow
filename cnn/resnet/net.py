@@ -5,7 +5,7 @@ from cnn.origin.block import Block
 from cnn.origin.section import Section
 from cnn.origin.net import Net
 from cnn.utils.tf_util import do_bn, get_w
-import cnn.utils.util as util
+import cnn.utils.base_util as util
 import time
 
 DATA_TRAIN = './data/cifar-100-python/train'
@@ -32,29 +32,34 @@ class ResNetLayer(Layer):
     def layer(self):
         self.inputs = do_bn(self.inputs, name='bn')
         self.inputs = tf.nn.relu(self.inputs, name='relu')
-        filters = get_w(self.filters, 'weight')
-        return tf.nn.conv2d(self.inputs, filters, self.strides, self.padding, name='conv2d')
+        return tf.nn.conv2d(self.inputs, self.filters, self.strides, self.padding, name='conv2d')
             
 
 class ResNetBlock(Block):
     def block(self):
         shortcut = self.inputs
-        if self.in_channels < self.out_channels:
-            layer = Layer()
-            layer.config(shortcut, [self.kernel_size, self.kernel_size, self.in_channels, self.out_channels])
-            shortcut = layer.set_scope('shortcut').exec()
+        in_channels = self.inputs.get_shape().as_list()[-1]
+        strides = 1
+        if in_channels < self.out_channels:
             strides = 2
-        reduce_kernel_size = 1
+            shortcut = Layer().set_scope('shortcut').config(shortcut, self.out_channels, strides_size=strides).exec()
         reduce_channels = self.out_channels // 4
-        filters1 = [reduce_kernel_size, reduce_kernel_size, self.in_channels, reduce_channels]
-        self.inputs = self.layer.set_scope('layer1').config(self.inputs, filters1, strides).exec()
-        filters2 = [self.kernel_size, self.kernel_size, reduce_channels, reduce_channels]
-        self.inputs = self.layer.set_scope('layer2').config(self.inputs, filters2).exec()
-        filters3 = [reduce_kernel_size, reduce_kernel_size, reduce_channels, self.out_channels]
-        self.inputs = self.layer.set_scope('layer3').config(self.inputs, filters3).exec()
-        self.inputs = tf.add(shortcut, self.inputs)
+        self.inputs = self.layer.set_scope('layer1').config(self.inputs, reduce_channels, strides_size=strides).exec()
+        self.inputs = self.layer.set_scope('layer2')\
+                                .config(self.inputs, reduce_channels, kernel_size=3).exec()
+        self.inputs = self.layer.set_scope('layer3').config(self.inputs, self.out_channels).exec()
+        self.inputs = tf.add(shortcut, self.inputs, name='add')
         return self.inputs
-            
+
+
+class ResNetSection(Section):
+    def section(self):
+        self.inputs = self.block.set_scope('block_0').config(self.inputs, self.out_channels).exec()
+        for i in range(1, self.blocks_num):
+            scope = 'block_{}'.format(i)
+            self.inputs = self.block.set_scope(scope).config(self.inputs, self.out_channels).exec()
+        return self.inputs
+
 
 class ResNet50(Net):
     def before_train(self):
@@ -65,19 +70,31 @@ class ResNet50(Net):
             return self.inputs
 
     def net(self):
-        self.inputs = Layer().config(self.inputs, [3, 3, 3, CHANNELS_1, 2]).exec()
-        self.inputs = self.section.set_scope('section_1').config(self.inputs, CHANNELS_1, CHANNELS_2, 3).exec()
-        self.inputs = self.section.set_scope('section_2').config(self.inputs, CHANNELS_2, CHANNELS_3, 4).exec()
-        self.inputs = self.section.set_scope('section_3').config(self.inputs, CHANNELS_3, CHANNELS_4, 6).exec()
-        self.inputs = self.section.set_scope('section_4').config(self.inputs, CHANNELS_4, CHANNELS_5, 3).exec()
-      
-            
+        self.inputs = Layer().set_scope('section_0').config(self.inputs, CHANNELS_1, kernel_size=3).exec()
+        self.inputs = self.section.set_scope('section_1').config(self.inputs, CHANNELS_2, 3).exec()
+        self.inputs = self.section.set_scope('section_2').config(self.inputs, CHANNELS_3, 4).exec()
+        self.inputs = self.section.set_scope('section_3').config(self.inputs, CHANNELS_4, 6).exec()
+        self.inputs = self.section.set_scope('section_4').config(self.inputs, CHANNELS_5, 3).exec()
+
+
+def get_batch(data, idx):
+    file_names = np.asarray(data[b'filenames'])
+    fine_labels = np.asarray(data[b'fine_labels'])
+    coarse_labels = np.asarray(data[b'coarse_labels'])
+    image = np.asarray(data[b'data'])
+    file_names_batch = file_names[idx]
+    fine_labels_batch = fine_labels[idx]
+    coarse_labels_batch = coarse_labels[idx]
+    image_batch = image[idx].reshape([-1, 32, 32, 3])
+    return file_names_batch, fine_labels_batch, coarse_labels_batch, image_batch
+
+
 def train():
     t1 = time.time()
     tf.reset_default_graph()
     x = tf.placeholder(tf.uint8, shape=[BATCH_SIZE, 32, 32, 3], name='images')
     y = tf.placeholder(tf.int32, shape=[BATCH_SIZE], name='labels')
-    cls = ResNet50(x).set_scope('res_net_50').config(ResNetLayer(), ResNetBlock(), Section()).exec()
+    cls = ResNet50().build(ResNetLayer(), ResNetBlock(), ResNetSection()).set_scope('res_net_50').config(x).exec()
     loss = tf.nn.sparse_softmax_cross_entropy_with_logits(labels=y, logits=cls, name='loss')
     loss_mean = tf.reduce_mean(loss, name='loss_mean')
     global_step = tf.Variable(0, name='global_step')
@@ -98,17 +115,14 @@ def train():
         sess.run(tf.global_variables_initializer())
         idx_train = np.linspace(0, TRAIN_TOTAL_SIZE - 1, TRAIN_TOTAL_SIZE, dtype=np.int32)
         step = 0
-        accuracies_train = []
-        accuracies_test = []
-        losses_train = []
-        losses_test = []
+        accuracies_train, accuracies_test, losses_train, losses_test = [], [], [], []
         for i in range(EPOCH):
             np.random.shuffle(idx_train)
             for j in range(TRAIN_TIMES_FOR_EPOCH):
                 idx_j = np.linspace(j * BATCH_SIZE, (j + 1) * BATCH_SIZE - 1, BATCH_SIZE,
                                     dtype=np.int32)
                 idx_train_batch = idx_train[idx_j]
-                _, labels_train, _, images_train = util.get_batch(data_train, idx_train_batch)
+                _, labels_train, _, images_train = get_batch(data_train, idx_train_batch)
                 feed_dict_train = {
                     x: images_train,
                     y: labels_train
@@ -118,12 +132,12 @@ def train():
                 accuracy_train = sum(labels_train == arg_idx_train) / BATCH_SIZE
                 # test 
                 idx_test_batch = np.random.randint(0, TEST_TOTAL_SIZE, [BATCH_SIZE])
-                _, labels_test, _, images_test = util.get_batch(data_test, idx_test_batch)
+                _, labels_test, _, images_test = get_batch(data_test, idx_test_batch)
                 feed_dict_test = {
                     x: images_test,
                     y: labels_test
                 }
-                cls_test, loss_test = sess.run(cls, loss_mean, feed_dict=feed_dict_test)
+                cls_test, loss_test = sess.run([cls, loss_mean], feed_dict=feed_dict_test)
                 arg_idx_test = np.argmax(cls_test, axis=1)
                 accuracy_test = sum(labels_test == arg_idx_test) / BATCH_SIZE
 
@@ -148,4 +162,13 @@ def train():
     print('耗时：{}'.format(util.str_time(t2 - t1)))
 
 
-train()
+def graph_test():
+    tf.reset_default_graph()
+    x = tf.placeholder(tf.uint8, shape=[BATCH_SIZE, 32, 32, 3], name='images')
+    y = tf.placeholder(tf.int32, shape=[BATCH_SIZE], name='labels')
+    cls = ResNet50().build(ResNetLayer(), ResNetBlock(), ResNetSection()).set_scope('res_net_50').config(x).exec()
+    tf.summary.FileWriter('./log')
+    [print(i) for i in tf.global_variables()]
+
+
+graph_test()

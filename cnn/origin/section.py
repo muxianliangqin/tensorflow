@@ -1,4 +1,3 @@
-import numpy as np
 import tensorflow as tf
 from cnn.origin.block import Block
 
@@ -6,15 +5,16 @@ from cnn.origin.block import Block
 class Section:
     default_scope = 'section'
     block = Block()
+    sup = None
     inputs = None
-    in_channels = None
     out_channels = None
     blocks_num = None
 
-    def __init__(self, inputs):
-        if not isinstance(inputs, np.ndarray):
-            raise Exception('参数:inputs不是ndarray类型', inputs)
-        self.inputs = inputs
+    def set_block(self, block):
+        if not isinstance(block, Block):
+            raise Exception('参数:block不是Layer类型', Block)
+        self.block = block
+        return self
 
     def set_scope(self, scope):
         if not isinstance(scope, str):
@@ -28,26 +28,22 @@ class Section:
         self.block = block
         return self
 
-    def config(self, in_channels, out_channels, blocks_num):
-        if not isinstance(in_channels, int):
-            raise Exception('参数:in_channels不是int类型', in_channels)
+    def set_sup(self, sup):
+        self.sup = sup
+
+    def config(self, inputs, out_channels, blocks_num):
         if not isinstance(out_channels, int):
             raise Exception('参数:out_channels不是int类型', out_channels)
         if not isinstance(blocks_num, int):
             raise Exception('参数:blocks_num不是int类型', blocks_num)
         if blocks_num <= 0:
             raise Exception('参数:blocks_num必须大于0', blocks_num)
-        self.in_channels = in_channels
+        self.inputs = inputs
         self.out_channels = out_channels
         self.blocks_num = blocks_num
         return self
 
     def section(self):
-        self.inputs = self.block.set_scope('block_0').config(self.inputs, self.in_channels, self.out_channels).exec()
-        for i in range(1, self.blocks_num):
-            self.inputs = self.block.set_scope('block_{}'.format(i)) \
-                .config(self.inputs, self.out_channels, self.out_channels) \
-                .exec()
         return self.inputs
 
     def exec(self):
