@@ -75,7 +75,11 @@ class Layer:
         self.padding = padding
         return self
 
-    def get_convolution_params(self):
+    def get_filters(self):
+        """
+        计算卷积需要的滤波器参数:filters
+        :return:
+        """
         self.inputs_shape = self.inputs.get_shape().as_list()
         self.filters_shape = [self.kernel_size, self.kernel_size, self.inputs_shape[-1], self.out_channels]
         self.strides = [1, self.strides_size, self.strides_size, 1]
@@ -83,10 +87,18 @@ class Layer:
         return self
 
     def layer(self):
+        """
+        具体实现layer
+        :return:
+        """
         self.inputs = tf.nn.conv2d(self.inputs, self.filters, self.strides, self.padding, name='conv2d')
         return self
 
     def log(self):
+        """
+        日志记录layer的一些具体配置
+        :return:
+        """
         if self.if_log:
             scopes = []
             obj = self
@@ -101,8 +113,12 @@ class Layer:
         return self
 
     def exec(self):
+        """
+        当layer配置完成后，最后一步执行此方法，生成网络
+        :return:
+        """
         with tf.variable_scope(self.default_scope, reuse=tf.AUTO_REUSE):
-            self.get_convolution_params()
+            self.get_filters()
             self.log()
             self.layer()
             return self.inputs

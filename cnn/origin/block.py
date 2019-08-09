@@ -35,6 +35,10 @@ class Block:
         return self
 
     def block(self):
+        """
+        具体实现block
+        :return:
+        """
         self.inputs = self.layer.config(self.inputs, self.out_channels).exec()
         return self
 
