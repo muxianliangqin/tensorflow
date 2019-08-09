@@ -30,6 +30,7 @@ class Section:
 
     def set_sup(self, sup):
         self.sup = sup
+        return self
 
     def config(self, inputs, out_channels, blocks_num):
         if not isinstance(out_channels, int):
@@ -44,9 +45,10 @@ class Section:
         return self
 
     def section(self):
-        return self.inputs
+        return self
 
     def exec(self):
         with tf.variable_scope(self.default_scope, reuse=tf.AUTO_REUSE):
-            return self.section()
+            self.section()
+            return self.inputs
 

@@ -13,6 +13,25 @@ class Layer:
     kernel_size = 1
     strides_size = 1
     padding = 'SAME'
+    if_log = False
+
+    @staticmethod
+    def get_w(shape, name):
+        return tf.get_variable(name=name, shape=shape,
+                               initializer=tf.truncated_normal_initializer(mean=0, stddev=0.1))
+
+    @staticmethod
+    def do_bn(inputs, name):
+        with tf.variable_scope(name_or_scope=name, reuse=tf.AUTO_REUSE):
+            init_shape = inputs.get_shape().as_list()[-1:]
+            mean, variance = tf.nn.moments(inputs, axes=[0, 1, 2], name='moments')
+            beta = tf.get_variable(name='beta', shape=init_shape, dtype=tf.float32,
+                                   initializer=tf.constant_initializer(0.0, tf.float32))
+            gamma = tf.get_variable(name='gamma', shape=init_shape, dtype=tf.float32,
+                                    initializer=tf.constant_initializer(1.0, tf.float32))
+            variance_epsilon = 1e-9
+            return tf.nn.batch_normalization(inputs, mean, variance, beta, gamma, variance_epsilon,
+                                             name='batch_normalization')
 
     def set_scope(self, scope):
         if not isinstance(scope, str):
@@ -22,6 +41,13 @@ class Layer:
 
     def set_sup(self, sup):
         self.sup = sup
+        return self
+
+    def set_log(self, log):
+        if not isinstance(log, bool):
+            raise Exception('参数:log不是bool类型', log)
+        self.if_log = log
+        return self
 
     def config(self, inputs, out_channels, kernel_size=1, strides_size=1, padding='SAME'):
         """
@@ -53,17 +79,15 @@ class Layer:
         self.inputs_shape = self.inputs.get_shape().as_list()
         self.filters_shape = [self.kernel_size, self.kernel_size, self.inputs_shape[-1], self.out_channels]
         self.strides = [1, self.strides_size, self.strides_size, 1]
-        self.filters = tf.get_variable(name='weight', shape=self.filters_shape,
-                                       initializer=tf.truncated_normal_initializer(mean=0, stddev=0.1))
+        self.filters = Layer.get_w(shape=self.filters_shape, name='weight')
         return self
 
     def layer(self):
         self.inputs = tf.nn.conv2d(self.inputs, self.filters, self.strides, self.padding, name='conv2d')
-        return self.inputs
+        return self
 
-    def exec(self):
-        with tf.variable_scope(self.default_scope, reuse=tf.AUTO_REUSE):
-            self.get_convolution_params()
+    def log(self):
+        if self.if_log:
             scopes = []
             obj = self
             while True:
@@ -74,4 +98,11 @@ class Layer:
             print('{},inputs.shape:{},filter.shape:{},strides:{},padding:{}'
                   .format('/'.join(scopes), self.inputs.get_shape().as_list(),
                           self.filters_shape, self.strides, self.padding))
-            return self.layer()
+        return self
+
+    def exec(self):
+        with tf.variable_scope(self.default_scope, reuse=tf.AUTO_REUSE):
+            self.get_convolution_params()
+            self.log()
+            self.layer()
+            return self.inputs
