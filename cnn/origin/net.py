@@ -21,6 +21,7 @@ class Net:
     inputs = None
     labels = None
     classes = None
+    accuracy = None
 
     def set_scope(self, scope):
         if not isinstance(scope, str):
@@ -83,12 +84,12 @@ class Net:
         :return:
         """
         with tf.variable_scope(name_or_scope='validation', reuse=tf.AUTO_REUSE):
-            self.inputs = Layer().set_scope('global_average_pooling').config(self.inputs, self.classes).exec()
-            gap = tf.reduce_mean(self.inputs, axis=[1, 2], name='reduce_mean')
+            self.inputs = Layer().set_scope('layer').config(self.inputs, self.classes).exec()
+            gap = tf.reduce_mean(self.inputs, axis=[1, 2], name='global_average_pooling')
             self.inputs = tf.squeeze(gap, name='squeeze')
-            result = tf.equal(tf.argmax(self.inputs, axis=-1, name='compute_result'), self.labels, name='equal')
-            accuracy = tf.reduce_mean(tf.cast(result, dtype=tf.float16, name='cast'), name='accuracy')
-            tf.summary.scalar('accuracy', accuracy)
+            result = tf.equal(tf.argmax(self.inputs, axis=-1, name='arg_max'), self.labels, name='equal')
+            self.accuracy = tf.reduce_mean(tf.cast(result, dtype=tf.float16, name='cast'), name='accuracy')
+            tf.summary.scalar('accuracy', self.accuracy)
             return self
 
     def optimizer(self):

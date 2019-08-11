@@ -15,7 +15,7 @@ TEST_TOTAL_SIZE = 10000
 TRAIN_TIMES_FOR_EPOCH = int(TRAIN_TOTAL_SIZE / BATCH_SIZE)
 TEST_TIMES_FOR_EPOCH = int(TEST_TOTAL_SIZE / BATCH_SIZE)
 PRINT_EVERY_TIMES = 50
-EPOCH = 150
+EPOCH = 50
 CLASSES = 100
 FILTERS_SIZE = 32
 W_HEIGHT = 16*FILTERS_SIZE*4
@@ -95,10 +95,12 @@ def train():
     t1 = time.time()
     tf.reset_default_graph()
     x = tf.placeholder(tf.uint8, shape=[BATCH_SIZE, 32, 32, 3], name='images')
-    y = tf.placeholder(tf.int32, shape=[BATCH_SIZE], name='labels')
-    train_op = ResNet50().build(ResNetLayer(), ResNetBlock(), ResNetSection())\
-                         .set_scope('res_net_50').set_lr(LEARNING_RATE)\
-                         .config(x, y, CLASSES).exec()
+    y = tf.placeholder(tf.int64, shape=[BATCH_SIZE], name='labels')
+    net = ResNet50().build(ResNetLayer(), ResNetBlock(), ResNetSection())\
+                    .set_scope('res_net_50').set_lr(LEARNING_RATE)\
+                    .config(x, y, CLASSES)
+    train_op = net.exec()
+    accuracy = net.accuracy
     graph = tf.get_default_graph()
     summaries = tf.summary.merge_all()
     saver = tf.train.Saver(max_to_keep=5)
@@ -124,12 +126,12 @@ def train():
                 idx_test_batch = np.random.randint(0, TEST_TOTAL_SIZE, [BATCH_SIZE])
                 _, labels_test, _, images_test = get_batch(data_test, idx_test_batch)
                 feed_dict_test = {x: images_test, y: labels_test}
-                summary_test = sess.run([summaries], feed_dict=feed_dict_test)
+                summary_test, _ = sess.run([summaries, accuracy], feed_dict=feed_dict_test)
                 step += 1
                 if step % PRINT_EVERY_TIMES == 0:
-                    print('step:{}',step)
                     writer_train.add_summary(summary_train, step)
                     writer_test.add_summary(summary_test, step)
+            print('EPOCH:{}'.format(i+1))
             saver.save(sess, save_path='./model/cifar-resnet.ckpt', global_step=step)
 
     t2 = time.time()
