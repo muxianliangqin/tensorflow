@@ -62,6 +62,27 @@ class ResNetSection(Section):
 
 
 class ResNet50(Net):
+    layers_num = 50
+    blocks_num_every_section = [3, 4, 6, 3]
+    start_channels = 64
+
+    def set_layer_num(self, num):
+        if num == 18:
+            self.blocks_num_every_section = [2, 2, 2, 2]
+        elif num == 34:
+            self.blocks_num_every_section = [3, 4, 6, 3]
+        elif num == 50:
+            self.blocks_num_every_section = [3, 4, 6, 3]
+        elif num == 101:
+            self.blocks_num_every_section = [3, 4, 23, 3]
+        elif num == 152:
+            self.blocks_num_every_section = [3, 4, 36, 3]
+        else:
+            self.blocks_num_every_section = [3, 4, 6, 3]
+
+    def set_start_channels(self, channels):
+        self.start_channels = channels
+
     def before_train(self):
         with tf.variable_scope('before_train', reuse=tf.AUTO_REUSE):
             self.inputs = tf.image.convert_image_dtype(self.inputs, dtype=tf.float32, name='convert_image_dtype')
@@ -71,11 +92,15 @@ class ResNet50(Net):
 
     def net(self):
         with tf.variable_scope('train', reuse=tf.AUTO_REUSE):
-            self.inputs = Layer().set_scope('section_0').config(self.inputs, CHANNELS_1, kernel_size=3).exec()
-            self.inputs = self.section.set_scope('section_1').config(self.inputs, CHANNELS_2, 3).exec()
-            self.inputs = self.section.set_scope('section_2').config(self.inputs, CHANNELS_3, 4).exec()
-            self.inputs = self.section.set_scope('section_3').config(self.inputs, CHANNELS_4, 6).exec()
-            self.inputs = self.section.set_scope('section_4').config(self.inputs, CHANNELS_5, 3).exec()
+            self.inputs = Layer().set_scope('section_0').config(self.inputs, self.start_channels, kernel_size=3).exec()
+            self.inputs = self.section.set_scope('section_1').config(self.inputs, self.start_channels * 2,
+                                                                     self.blocks_num_every_section[0]).exec()
+            self.inputs = self.section.set_scope('section_2').config(self.inputs, self.start_channels * 4,
+                                                                     self.blocks_num_every_section[1]).exec()
+            self.inputs = self.section.set_scope('section_3').config(self.inputs, self.start_channels * 8,
+                                                                     self.blocks_num_every_section[2]).exec()
+            self.inputs = self.section.set_scope('section_4').config(self.inputs, self.start_channels * 16,
+                                                                     self.blocks_num_every_section[3]).exec()
             return self
 
 
