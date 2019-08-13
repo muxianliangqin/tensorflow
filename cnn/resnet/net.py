@@ -4,26 +4,22 @@ from cnn.origin.layer import Layer
 from cnn.origin.block import Block
 from cnn.origin.section import Section
 from cnn.origin.net import Net
+from cnn.origin.batch import Batch
 import cnn.utils.base_util as util
 import time
 
 DATA_TRAIN = './data/cifar-100-python/train'
 DATA_TEST = './data/cifar-100-python/test'
+MODEL_SAVE_PATH = './model/cifar-resnet.ckpt'
+LOG_TRAIN = './log/train'
+LOG_TEST = './log/test'
 BATCH_SIZE = 100
 TRAIN_TOTAL_SIZE = 50000
 TEST_TOTAL_SIZE = 10000
-TRAIN_TIMES_FOR_EPOCH = int(TRAIN_TOTAL_SIZE / BATCH_SIZE)
-TEST_TIMES_FOR_EPOCH = int(TEST_TOTAL_SIZE / BATCH_SIZE)
 PRINT_EVERY_TIMES = 50
 EPOCH = 50
 CLASSES = 100
 FILTERS_SIZE = 32
-W_HEIGHT = 16*FILTERS_SIZE*4
-CHANNELS_1 = 64
-CHANNELS_2 = CHANNELS_1 * 2
-CHANNELS_3 = CHANNELS_1 * 4
-CHANNELS_4 = CHANNELS_1 * 8
-CHANNELS_5 = CHANNELS_1 * 16
 LEARNING_RATE = 0.001
 
 
@@ -44,10 +40,22 @@ class ResNetBlock(Block):
             strides = 2
             shortcut = Layer().set_scope('shortcut').config(shortcut, self.out_channels, strides_size=strides).exec()
         reduce_channels = self.out_channels // 4
-        self.inputs = self.layer.set_scope('layer1').config(self.inputs, reduce_channels, strides_size=strides).exec()
-        self.inputs = self.layer.set_scope('layer2')\
-                                .config(self.inputs, reduce_channels, kernel_size=3).exec()
-        self.inputs = self.layer.set_scope('layer3').config(self.inputs, self.out_channels).exec()
+        layers_num = 50
+        net = self.sup.sup
+        if hasattr(net, 'layers_num'):
+            layers_num = net.layers_num
+        if layers_num in [18, 34]:
+            self.inputs = self.layer.set_scope('layer1')\
+                                    .config(self.inputs, self.out_channels, strides_size=strides, kernel_size=3).exec()
+            self.inputs = self.layer.set_scope('layer2')\
+                                    .config(self.inputs, self.out_channels, kernel_size=3).exec()
+        else:
+            self.inputs = self.layer.set_scope('layer1')\
+                                    .config(self.inputs, reduce_channels, strides_size=strides).exec()
+            self.inputs = self.layer.set_scope('layer2')\
+                                    .config(self.inputs, reduce_channels, kernel_size=3).exec()
+            self.inputs = self.layer.set_scope('layer3')\
+                                    .config(self.inputs, self.out_channels).exec()
         self.inputs = tf.add(shortcut, self.inputs, name='add')
         return self
 
@@ -61,12 +69,13 @@ class ResNetSection(Section):
         return self
 
 
-class ResNet50(Net):
+class ResNet(Net):
     layers_num = 50
     blocks_num_every_section = [3, 4, 6, 3]
-    start_channels = 64
+    start_channels = 256
 
     def set_layer_num(self, num):
+        self.layers_num = num
         if num == 18:
             self.blocks_num_every_section = [2, 2, 2, 2]
         elif num == 34:
@@ -79,9 +88,11 @@ class ResNet50(Net):
             self.blocks_num_every_section = [3, 4, 36, 3]
         else:
             self.blocks_num_every_section = [3, 4, 6, 3]
+        return self
 
     def set_start_channels(self, channels):
         self.start_channels = channels
+        return self
 
     def before_train(self):
         with tf.variable_scope('before_train', reuse=tf.AUTO_REUSE):
@@ -104,16 +115,9 @@ class ResNet50(Net):
             return self
 
 
-def get_batch(data, idx):
-    file_names = np.asarray(data[b'filenames'])
-    fine_labels = np.asarray(data[b'fine_labels'])
-    coarse_labels = np.asarray(data[b'coarse_labels'])
-    image = np.asarray(data[b'data'])
-    file_names_batch = file_names[idx]
-    fine_labels_batch = fine_labels[idx]
-    coarse_labels_batch = coarse_labels[idx]
-    image_batch = image[idx].reshape([-1, 32, 32, 3])
-    return file_names_batch, fine_labels_batch, coarse_labels_batch, image_batch
+class TestBatch(Batch):
+    def batch_index(self):
+        self.index_batch = np.random.randint(0, TEST_TOTAL_SIZE, [BATCH_SIZE])
 
 
 def train():
@@ -121,43 +125,39 @@ def train():
     tf.reset_default_graph()
     x = tf.placeholder(tf.uint8, shape=[BATCH_SIZE, 32, 32, 3], name='images')
     y = tf.placeholder(tf.int64, shape=[BATCH_SIZE], name='labels')
-    net = ResNet50().build(ResNetLayer(), ResNetBlock(), ResNetSection())\
-                    .set_scope('res_net_50').set_lr(LEARNING_RATE)\
-                    .config(x, y, CLASSES)
+    net = ResNet().build(ResNetLayer(), ResNetBlock(), ResNetSection())\
+                  .set_scope('res_net_50').set_lr(LEARNING_RATE).set_layer_num(50)\
+                  .config(x, y, CLASSES)
     train_op = net.exec()
     accuracy = net.accuracy
     graph = tf.get_default_graph()
     summaries = tf.summary.merge_all()
     saver = tf.train.Saver(max_to_keep=5)
     with tf.Session(graph=graph) as sess:
-        writer_train = tf.summary.FileWriter('./log/train', sess.graph)
-        writer_test = tf.summary.FileWriter('./log/test')
+        writer_train = tf.summary.FileWriter(LOG_TRAIN, sess.graph)
+        writer_test = tf.summary.FileWriter(LOG_TEST)
         data_train = util.load_data(DATA_TRAIN)
         data_test = util.load_data(DATA_TEST)
         sess.run(tf.global_variables_initializer())
-        idx_train = np.linspace(0, TRAIN_TOTAL_SIZE - 1, TRAIN_TOTAL_SIZE, dtype=np.int32)
-        step = 0
-        for i in range(EPOCH):
-            np.random.shuffle(idx_train)
-            for j in range(TRAIN_TIMES_FOR_EPOCH):
-                idx_j = np.linspace(j * BATCH_SIZE, (j + 1) * BATCH_SIZE - 1, BATCH_SIZE,
-                                    dtype=np.int32)
-                idx_train_batch = idx_train[idx_j]
-                _, labels_train, _, images_train = get_batch(data_train, idx_train_batch)
+        while True:
+            try:
+                batch_train = Batch().config(data_train, TRAIN_TOTAL_SIZE, BATCH_SIZE, EPOCH)
+                batch_test = TestBatch().config(data_test, TEST_TOTAL_SIZE, BATCH_SIZE)
+                labels_train, images_train = batch_train.exec()
                 feed_dict_train = {x: images_train, y: labels_train}
                 summary_train, _ = sess.run([summaries, train_op], feed_dict=feed_dict_train)
-
                 # test
-                idx_test_batch = np.random.randint(0, TEST_TOTAL_SIZE, [BATCH_SIZE])
-                _, labels_test, _, images_test = get_batch(data_test, idx_test_batch)
+                labels_test, images_test = batch_test.exec()
                 feed_dict_test = {x: images_test, y: labels_test}
                 summary_test, _ = sess.run([summaries, accuracy], feed_dict=feed_dict_test)
-                step += 1
+                step = batch_test.step
                 if step % PRINT_EVERY_TIMES == 0:
                     writer_train.add_summary(summary_train, step)
                     writer_test.add_summary(summary_test, step)
-            print('EPOCH:{}'.format(i+1))
-            saver.save(sess, save_path='./model/cifar-resnet.ckpt', global_step=step)
+                print('EPOCH:{}'.format(batch_test.epoch + 1))
+                saver.save(sess, save_path=MODEL_SAVE_PATH, global_step=step)
+            except tf.errors.OutOfRangeError as e:
+                break
 
     t2 = time.time()
     print('耗时：{}'.format(util.str_time(t2 - t1)))
@@ -166,12 +166,12 @@ def train():
 def graph_test():
     tf.reset_default_graph()
     x = tf.placeholder(tf.uint8, shape=[BATCH_SIZE, 32, 32, 3], name='images')
-    y = tf.placeholder(tf.int32, shape=[BATCH_SIZE], name='labels')
-    train_op = ResNet50().build(ResNetLayer(), ResNetBlock(), ResNetSection())\
-                         .set_scope('res_net_50').set_lr(LEARNING_RATE)\
-                         .config(x, y, CLASSES).exec()
+    y = tf.placeholder(tf.int64, shape=[BATCH_SIZE], name='labels')
+    train_op = ResNet().build(ResNetLayer(), ResNetBlock(), ResNetSection())\
+                       .set_scope('res_net_50').set_lr(LEARNING_RATE).set_layer_num(34)\
+                       .config(x, y, CLASSES).exec()
     tf.summary.FileWriter('./log', tf.get_default_graph())
     # [print(i) for i in tf.global_variables()]
 
 
-train()
+graph_test()
