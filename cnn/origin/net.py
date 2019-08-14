@@ -8,7 +8,7 @@ class Net:
     """
     本类主要用于创建类resnet类型的cnn网络，网络从小到大为Layer->Block->Section->Net
     Layer：基础层，重写方法layer()
-    Block：Layer组成的块，重写方法block()
+    Block：Layer组成的块，重写方法residual()和shortcut()
     Section：Block组成的域，重写方法section()
     Net：整个网络，重写方法net()
     创建新的类型的网络时，一般重写相应同名的方法即可

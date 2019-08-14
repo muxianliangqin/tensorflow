@@ -7,6 +7,7 @@ class Block:
     layer = Layer()
     sup = None
     inputs = None
+    shortcut = inputs
     out_channels = None
     kernel_size = 1
 
@@ -34,12 +35,36 @@ class Block:
         self.kernel_size = kernel_size
         return self
 
+    def compute_residual(self):
+        """
+        差分模块计算
+        :return:
+        """
+        return self
+
+    def compute_shortcut(self):
+        """
+        快捷连接模块计算
+        :return:
+        """
+        return self
+
+    def integrate(self):
+        """
+        整合模块
+        快捷连接模块和差分
+        :return:
+        """
+        self.inputs = tf.add(self.shortcut, self.inputs, name='add')
+
     def block(self):
         """
         具体实现block
         :return:
         """
-        self.inputs = self.layer.config(self.inputs, self.out_channels).exec()
+        self.compute_shortcut()
+        self.compute_residual()
+        self.integrate()
         return self
 
     def exec(self):
