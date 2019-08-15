@@ -5,11 +5,11 @@ import tensorflow as tf
 class Block:
     default_scope = 'block'
     layer = Layer()
+    kernel_size = 1
     sup = None
     inputs = None
-    shortcut = inputs
+    shortcut = None
     out_channels = None
-    kernel_size = 1
 
     def set_scope(self, scope):
         if not isinstance(scope, str):
@@ -31,6 +31,7 @@ class Block:
         if not isinstance(out_channels, int):
             raise Exception('参数:out_channels不是int类型', out_channels)
         self.inputs = inputs
+        self.shortcut = inputs
         self.out_channels = out_channels
         self.kernel_size = kernel_size
         return self

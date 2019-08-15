@@ -16,7 +16,7 @@ LOG_TEST = './log/test'
 BATCH_SIZE = 100
 TRAIN_TOTAL_SIZE = 50000
 TEST_TOTAL_SIZE = 10000
-PRINT_EVERY_TIMES = 1
+PRINT_EVERY_TIMES = 50
 EPOCH = 50
 CLASSES = 100
 FILTERS_SIZE = 32
@@ -35,9 +35,8 @@ class ResNetBlock(Block):
     def compute_shortcut(self):
         in_channels = self.inputs.get_shape().as_list()[-1]
         if in_channels < self.out_channels:
-            strides = 2
             self.shortcut = Layer().set_scope('shortcut')\
-                                   .config(self.shortcut, self.out_channels, strides_size=strides).exec()
+                                   .config(self.shortcut, self.out_channels, strides_size=2).exec()
         return self
 
     def compute_residual(self):
@@ -162,7 +161,7 @@ def train():
                     writer_train.add_summary(summary_train, step)
                     writer_test.add_summary(summary_test, step)
                 if batch_train.cycle_one_epoch:
-                    print('EPOCH:{},save model'.format(batch_test.epoch + 1))
+                    print('EPOCH:{},save model'.format(batch_train.epoch + 1))
                     saver.save(sess, save_path=MODEL_SAVE_PATH, global_step=step)
             except Exception as e:
                 break
