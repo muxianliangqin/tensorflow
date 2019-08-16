@@ -1,5 +1,5 @@
 import numpy as np
-import tensorflow as tf
+import cnn.utils.base_util as util
 
 
 class Batch:
@@ -10,6 +10,7 @@ class Batch:
     epoch = 0
     step = 0
     cycle_one_epoch = False
+    data_path = None
     data = None
     total_size = None
     index_total = None
@@ -17,8 +18,9 @@ class Batch:
     index_batch = None
     data_batch = None
 
-    def config(self, data, total, batch, epoch=1):
-        self.data = data
+    def config(self, data_path, total, batch, epoch=1):
+        self.data_batch = data_path
+        self.data = util.load_data(data_path)
         self.total_size = total
         self.batch_size = batch
         self.index_total = np.linspace(0, total - 1, total, dtype=np.int32)
@@ -39,7 +41,7 @@ class Batch:
                           self.batch_size, dtype=np.int32)
         self.index_batch = self.index_total[idx]
         if self.step >= self.epoch * batch_num_of_epoch:
-            raise Exception('批次结束', self.step)
+            raise StopIteration('批次结束', self.step)
         self.step += 1
         return self
 
@@ -59,3 +61,8 @@ class Batch:
         self.batch_index()
         self.batch_data()
         return self.data_batch
+
+
+class TestBatch(Batch):
+    def batch_index(self):
+        self.index_batch = np.random.randint(0, self.total_size, [self.batch_size])

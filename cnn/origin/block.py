@@ -38,7 +38,7 @@ class Block:
 
     def compute_residual(self):
         """
-        差分模块计算
+        残差模块计算
         :return:
         """
         return self
@@ -52,11 +52,12 @@ class Block:
 
     def integrate(self):
         """
-        整合模块
-        快捷连接模块和差分
+        整合
+        快捷连接模块和残差模块
         :return:
         """
         self.inputs = tf.add(self.shortcut, self.inputs, name='add')
+        return self
 
     def block(self):
         """

@@ -1,0 +1,13 @@
+DATA_TRAIN = '../data/cifar-100-python/train'
+DATA_TEST = '../data/cifar-100-python/test'
+MODEL_SAVE_PATH = './model/cifar-resnet.ckpt'
+LOG_TRAIN = './log/train'
+LOG_TEST = './log/test'
+BATCH_SIZE = 100
+TRAIN_TOTAL_SIZE = 50000
+TEST_TOTAL_SIZE = 10000
+PRINT_EVERY_TIMES = 50
+EPOCH = 50
+CLASSES = 100
+FILTERS_SIZE = 32
+LEARNING_RATE = 0.001
