@@ -109,7 +109,7 @@ class Net:
             return train_op
 
     def exec(self):
-        print('layer.type:{},block.type:{},section.type:{},net.type:{}'
+        print('layer.type:{},block.type:{},\nsection.type:{},net.type:{}'
               .format(type(self.layer), type(self.block), type(self.section), type(self)))
         with tf.variable_scope(self.default_scope, reuse=tf.AUTO_REUSE):
             self.before_train()

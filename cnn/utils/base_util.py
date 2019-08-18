@@ -4,17 +4,17 @@ import time
 
 def load_data(filename):
     with open(filename,'rb') as f:
-        data = pickle.load(f,encoding='bytes')
+        data = pickle.load(f, encoding='bytes')
         return data
 
 
-def dump_data(data,filename):
-    with open(filename,'wb') as f:
-        pickle.dump(data,f)
+def dump_data(data, filename):
+    with open(filename, 'wb') as f:
+        pickle.dump(data, f)
 
 
 def cur_time():
-    return time.strftime('%Y-%m-%d %H:%M:%S',time.localtime(time.time()))
+    return time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(time.time()))
 
 
 def str_time(ti):

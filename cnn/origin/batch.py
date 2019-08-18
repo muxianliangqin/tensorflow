@@ -8,6 +8,7 @@ class Batch:
     次类适合通过随机索引的方式获取训练批次
     """
     epoch = 0
+    max_epoch = 1
     step = 0
     cycle_one_epoch = False
     data_path = None
@@ -18,14 +19,14 @@ class Batch:
     index_batch = None
     data_batch = None
 
-    def config(self, data_path, total, batch, epoch=1):
+    def config(self, data_path, total, batch, max_epoch=1):
         self.data_batch = data_path
         self.data = util.load_data(data_path)
         self.total_size = total
         self.batch_size = batch
         self.index_total = np.linspace(0, total - 1, total, dtype=np.int32)
         np.random.shuffle(self.index_total)
-        self.epoch = epoch
+        self.max_epoch = max_epoch
         self.step = 0
         return self
 
@@ -36,12 +37,12 @@ class Batch:
             self.epoch += 1
             self.cycle_one_epoch = True
             np.random.shuffle(self.index_total)
+        if self.epoch >= self.max_epoch:
+            raise StopIteration('批次结束', self.step)
         step_in_epoch = self.step % batch_num_of_epoch
         idx = np.linspace(step_in_epoch, ((step_in_epoch + 1) * self.batch_size) - 1,
                           self.batch_size, dtype=np.int32)
         self.index_batch = self.index_total[idx]
-        if self.step >= self.epoch * batch_num_of_epoch:
-            raise StopIteration('批次结束', self.step)
         self.step += 1
         return self
 
