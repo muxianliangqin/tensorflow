@@ -46,7 +46,7 @@ class Train:
                         writer_train.add_summary(summary_train, step)
                         writer_test.add_summary(summary_test, step)
                     if self.batch_train.cycle_one_epoch:
-                        print('EPOCH:{},save model'.format(self.batch_train.epoch + 1))
+                        print('EPOCH:{},save model'.format(self.batch_train.epoch))
                         saver.save(sess, save_path=config.MODEL_SAVE_PATH, global_step=step)
                 except StopIteration as e:
                     print(e.args)
